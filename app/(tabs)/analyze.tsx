@@ -7,14 +7,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { View, Text } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { useTheme } from '@/components/useTheme';
 import { useDailySummaries } from '@/hooks/useDailySummaries';
 import type { DailySummary } from '@/hooks/useDailySummaries';
 
 export default function AnalyzeScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { colors, spacing, radius, typography } = useTheme();
   const { summaries, loading, refetch } = useDailySummaries();
 
   useFocusEffect(
@@ -22,9 +20,6 @@ export default function AnalyzeScreen() {
       refetch();
     }, [refetch])
   );
-
-  const dailyCardBg = colorScheme === 'dark' ? '#111' : '#f8f8f8';
-  const dailyCardBorder = colorScheme === 'dark' ? '#333' : '#eee';
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T12:00:00');
@@ -48,15 +43,15 @@ export default function AnalyzeScreen() {
         onPress={() => handlePressDay(item)}
         style={({ pressed }) => [
           styles.card,
-          { backgroundColor: dailyCardBg, borderColor: dailyCardBorder },
+          { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
           pressed && styles.cardPressed,
         ]}
       >
-        <View style={styles.dateBox}>
+        <View style={[styles.dateBox, { backgroundColor: colors.primary }]}>
           <Text style={styles.dateMonth}>{month}</Text>
           <Text style={styles.dateDay}>{day}</Text>
         </View>
-        <View style={[styles.stemsSection, { borderLeftColor: dailyCardBorder }]}>
+        <View style={[styles.stemsSection, { borderLeftColor: colors.cardBorder }]}>
           <Text style={[styles.stemsLabel, { color: colors.text }]}>
             Stems cut
           </Text>
@@ -70,16 +65,16 @@ export default function AnalyzeScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator style={styles.loader} />
+      <View style={[styles.container, { padding: spacing.lg }]}>
+        <ActivityIndicator style={[styles.loader, { marginTop: spacing.xl }]} />
       </View>
     );
   }
 
   if (summaries.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={[styles.empty, { color: colors.text }]}>
+      <View style={[styles.container, { padding: spacing.lg }]}>
+        <Text style={[styles.empty, { marginTop: spacing.xl, color: colors.text }]}>
           No harvest records yet. Record some stems in the Record tab.
         </Text>
       </View>
@@ -87,13 +82,15 @@ export default function AnalyzeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Daily totals</Text>
+    <View style={[styles.container, { padding: spacing.lg }]}>
+      <Text style={[styles.sectionTitle, { ...typography.sectionTitle, marginBottom: spacing.md, color: colors.text }]}>
+        Daily totals
+      </Text>
       <FlatList
         data={summaries}
         keyExtractor={(item) => item.date}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{ paddingBottom: spacing.xl }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </View>
@@ -101,19 +98,10 @@ export default function AnalyzeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  loader: { marginTop: 24 },
-  empty: {
-    marginTop: 24,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  listContent: { paddingBottom: 24 },
+  container: { flex: 1 },
+  sectionTitle: {},
+  loader: {},
+  empty: { fontSize: 16, textAlign: 'center' },
   separator: { height: 12 },
   card: {
     flexDirection: 'row',
@@ -124,7 +112,6 @@ const styles = StyleSheet.create({
   },
   cardPressed: { opacity: 0.9 },
   dateBox: {
-    backgroundColor: '#2f95dc',
     paddingHorizontal: 16,
     paddingVertical: 12,
     justifyContent: 'center',

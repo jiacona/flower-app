@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   TextInput,
@@ -8,20 +8,31 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { View, Text } from '@/components/Themed';
+import { useTheme } from '@/components/useTheme';
 import { useCrops } from '@/hooks/useCrops';
+import { useExport } from '@/hooks/useExport';
 import { useImport } from '@/hooks/useImport';
 import type { Crop } from '@/db/types';
 
 export default function PlanScreen() {
+  const { colors, spacing, radius, typography } = useTheme();
   const [search, setSearch] = useState('');
   const { crops, loading, addCrop, deleteCrop, refetch } = useCrops(search);
   const { importCropsFromCSV } = useImport();
+  const { exportHarvestToCSV } = useExport();
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [newCropName, setNewCropName] = useState('');
   const [adding, setAdding] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const handleAddCrop = async () => {
     const name = newCropName.trim();
@@ -49,6 +60,20 @@ export default function PlanScreen() {
     }
   };
 
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const result = await exportHarvestToCSV();
+      if (result.error && !result.success) {
+        Alert.alert('Export', result.error);
+      } else if (result.success) {
+        Alert.alert('Export', 'Harvest data exported. Use the share sheet to save or send the CSV.');
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleDeleteCrop = (crop: Crop) => {
     Alert.alert(
       'Delete crop',
@@ -65,50 +90,62 @@ export default function PlanScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>All crops</Text>
+    <View style={[styles.container, { padding: spacing.lg }]}>
+      <Text style={[styles.sectionTitle, { ...typography.sectionTitle, marginBottom: spacing.md, color: colors.text }]}>
+        All crops
+      </Text>
 
-      <View style={styles.searchRow}>
-        <Ionicons name="search" size={20} color="#666" />
+      <View style={[styles.searchRow, { backgroundColor: colors.inputBg, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: 10, marginBottom: spacing.md, gap: spacing.sm }]}>
+        <Ionicons name="search" size={20} color={colors.muted} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder="Search"
           value={search}
           onChangeText={setSearch}
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.muted}
         />
       </View>
 
-      <Pressable
-        style={[styles.importBtn, importing && styles.addBtnDisabled]}
-        onPress={handleImportCSV}
-        disabled={importing}
-      >
-        <Ionicons name="document-attach" size={20} color="#2f95dc" />
-        <Text style={styles.importBtnText}>Load from CSV</Text>
-      </Pressable>
+      <View style={[styles.dataActionsRow, { gap: spacing.md, marginBottom: spacing.md }]}>
+        <Pressable
+          style={[styles.importBtn, { borderColor: colors.primary, borderRadius: radius.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg }, (importing || exporting) && styles.addBtnDisabled]}
+          onPress={handleImportCSV}
+          disabled={importing || exporting}
+        >
+          <Ionicons name="document-attach" size={20} color={colors.primary} />
+          <Text style={[styles.importBtnText, { color: colors.primary, ...typography.body }]}>Load from CSV</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.exportBtn, { borderColor: colors.primary, borderRadius: radius.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg }, (importing || exporting) && styles.addBtnDisabled]}
+          onPress={handleExportCSV}
+          disabled={importing || exporting}
+        >
+          <Ionicons name="download-outline" size={20} color={colors.primary} />
+          <Text style={[styles.exportBtnText, { color: colors.primary, ...typography.body }]}>Export to CSV</Text>
+        </Pressable>
+      </View>
 
-      <View style={styles.addRow}>
+      <View style={[styles.addRow, { gap: spacing.sm, marginBottom: spacing.lg }]}>
         <TextInput
-          style={styles.addInput}
+          style={[styles.addInput, { borderColor: colors.inputBorder, borderRadius: radius.sm, backgroundColor: colors.surfaceElevated, color: colors.text }]}
           placeholder="New crop name"
           value={newCropName}
           onChangeText={setNewCropName}
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.muted}
         />
         <Pressable
-          style={[styles.addBtn, adding && styles.addBtnDisabled]}
+          style={[styles.addBtn, { backgroundColor: colors.primary, borderRadius: radius.sm, padding: spacing.md }, adding && styles.addBtnDisabled]}
           onPress={handleAddCrop}
           disabled={adding || !newCropName.trim()}
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={24} color={colors.onPrimary} />
         </Pressable>
       </View>
 
       {loading ? (
-        <ActivityIndicator style={styles.loader} />
+        <ActivityIndicator style={[styles.loader, { marginTop: spacing.xl }]} color={colors.text} />
       ) : crops.length === 0 ? (
-        <Text style={styles.empty}>
+        <Text style={[styles.empty, { color: colors.muted, marginTop: spacing.xl }]}>
           No crops. Add one above or load from CSV.
         </Text>
       ) : (
@@ -119,6 +156,7 @@ export default function PlanScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.row,
+                { borderBottomColor: colors.rowBorder },
                 pressed && styles.rowPressed,
               ]}
               onPress={() =>
@@ -128,16 +166,16 @@ export default function PlanScreen() {
                 })
               }
             >
-              <Text style={styles.cropName}>{item.name}</Text>
+              <Text style={[styles.cropName, { color: colors.text }]}>{item.name}</Text>
               <View style={styles.rowActions}>
                 <Pressable
                   onPress={() => handleDeleteCrop(item)}
-                  hitSlop={8}
+                  hitSlop={spacing.sm}
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#c00" />
+                  <Ionicons name="trash-outline" size={20} color={colors.destructive} />
                 </Pressable>
-                <Ionicons name="chevron-forward" size={20} color="#999" />
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
               </View>
             </Pressable>
           )}
@@ -148,71 +186,44 @@ export default function PlanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
+  container: { flex: 1 },
+  sectionTitle: {},
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-    gap: 8,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    padding: 0,
-  },
+  searchInput: { flex: 1, fontSize: 16, padding: 0 },
+  dataActionsRow: { flexDirection: 'row' },
   importBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2f95dc',
-    borderRadius: 8,
-    paddingHorizontal: 16,
   },
-  importBtnText: {
-    color: '#2f95dc',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  addRow: {
+  importBtnText: { fontWeight: '500' },
+  exportBtn: {
+    flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    marginBottom: 16,
+    borderWidth: 1,
   },
+  exportBtnText: { fontWeight: '500' },
+  addRow: { flexDirection: 'row' },
   addInput: {
     flex: 1,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  addBtn: {
-    backgroundColor: '#2f95dc',
-    borderRadius: 8,
-    padding: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  addBtn: { justifyContent: 'center', alignItems: 'center' },
   addBtnDisabled: { opacity: 0.5 },
-  loader: { marginTop: 24 },
-  empty: {
-    color: '#666',
-    marginTop: 24,
-    fontSize: 16,
-  },
+  loader: {},
+  empty: { fontSize: 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,7 +231,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   rowPressed: { opacity: 0.6 },
   cropName: { fontSize: 16 },

@@ -1,5 +1,5 @@
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState, useEffect, useCallback } from 'react';
-import { getDatabase } from '@/db/init';
 import type { HarvestRecord } from '@/db/types';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -7,13 +7,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function useHarvestRecords(
   filters?: { cropId?: number; varietyId?: number; date?: string; dateFrom?: string; dateTo?: string }
 ) {
+  const db = useSQLiteContext();
   const [records, setRecords] = useState<HarvestRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const db = await getDatabase();
       let sql = 'SELECT * FROM harvest_records WHERE 1=1';
       const args: (string | number)[] = [];
 
@@ -53,6 +53,7 @@ export function useHarvestRecords(
     filters?.date,
     filters?.dateFrom,
     filters?.dateTo,
+    db,
   ]);
 
   useEffect(() => {
@@ -67,7 +68,6 @@ export function useHarvestRecords(
       stemsWasted: number,
       varietyId?: number | null
     ) => {
-      const db = await getDatabase();
       await db.runAsync(
         'INSERT INTO harvest_records (crop_id, variety_id, harvest_date, stems_cut, stems_wasted) VALUES (?, ?, ?, ?, ?)',
         cropId,
@@ -78,7 +78,7 @@ export function useHarvestRecords(
       );
       await fetchRecords();
     },
-    [fetchRecords]
+    [fetchRecords, db]
   );
 
   const addRecordsBatch = useCallback(
@@ -91,7 +91,6 @@ export function useHarvestRecords(
       }>,
       harvestDate: string
     ) => {
-      const db = await getDatabase();
       for (const item of items) {
         await db.runAsync(
           'INSERT INTO harvest_records (crop_id, variety_id, harvest_date, stems_cut, stems_wasted) VALUES (?, ?, ?, ?, ?)',
@@ -104,7 +103,7 @@ export function useHarvestRecords(
       }
       await fetchRecords();
     },
-    [fetchRecords]
+    [fetchRecords, db]
   );
 
   const updateRecord = useCallback(
@@ -112,7 +111,6 @@ export function useHarvestRecords(
       id: number,
       updates: { stems_cut?: number; stems_wasted?: number }
     ) => {
-      const db = await getDatabase();
       if (updates.stems_cut !== undefined) {
         await db.runAsync('UPDATE harvest_records SET stems_cut = ? WHERE id = ?', updates.stems_cut, id);
       }
@@ -121,16 +119,15 @@ export function useHarvestRecords(
       }
       await fetchRecords();
     },
-    [fetchRecords]
+    [fetchRecords, db]
   );
 
   const deleteRecord = useCallback(
     async (id: number) => {
-      const db = await getDatabase();
       await db.runAsync('DELETE FROM harvest_records WHERE id = ?', id);
       await fetchRecords();
     },
-    [fetchRecords]
+    [fetchRecords, db]
   );
 
   return {

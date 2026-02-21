@@ -12,11 +12,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/Themed';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { useTheme } from '@/components/useTheme';
 import { useVarieties } from '@/hooks/useVarieties';
 import { useHarvestRecords, today } from '@/hooks/useHarvestRecords';
-import { getDatabase } from '@/db/init';
+import { useSQLiteContext } from 'expo-sqlite';
 import type { Crop } from '@/db/types';
 
 type StemEntry = { varietyId: number | null; varietyName: string; count: number };
@@ -24,8 +23,8 @@ type StemEntry = { varietyId: number | null; varietyName: string; count: number 
 const QUICK_ADD = [1, 5, 10];
 
 export default function StemEntryScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const db = useSQLiteContext();
+  const { colors, spacing, radius, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const { cropId, cropName } = useLocalSearchParams<{
     cropId: string;
@@ -47,11 +46,10 @@ export default function StemEntryScreen() {
 
   useEffect(() => {
     (async () => {
-      const db = await getDatabase();
       const row = await db.getFirstAsync<Crop>('SELECT * FROM crops WHERE id = ?', id);
       setCrop(row ?? null);
     })();
-  }, [id]);
+  }, [id, db]);
 
   useEffect(() => {
     if (varieties.length > 0 && entries.length === 0) {
@@ -107,7 +105,6 @@ export default function StemEntryScreen() {
 
     await addRecordsBatch(items, harvestDate);
 
-    const db = await getDatabase();
     await db.runAsync(
       `INSERT INTO recent_crops (crop_id, last_used_at) VALUES (?, datetime('now'))
        ON CONFLICT(crop_id) DO UPDATE SET last_used_at = datetime('now')`,
@@ -126,13 +123,10 @@ export default function StemEntryScreen() {
   const cardBg = (vid: number) => {
     const hasCount = getCountForId(vid) > 0;
     const sel = isSelected(vid);
-    if (colorScheme === 'dark') {
-      return sel || hasCount ? '#1a3a52' : '#222';
-    }
-    return sel || hasCount ? '#e3f2fd' : '#fff';
+    return sel || hasCount ? colors.primaryBg : colors.surfaceElevated;
   };
   const cardBorder = (vid: number) =>
-    isSelected(vid) ? '#2f95dc' : colorScheme === 'dark' ? '#333' : '#eee';
+    isSelected(vid) ? colors.primary : colors.cardBorder;
 
   if (!crop) return null;
 
@@ -150,7 +144,7 @@ export default function StemEntryScreen() {
               <Ionicons
                 name="chevron-back"
                 size={28}
-                color={colors.tint}
+                color={colors.primary}
               />
             </Pressable>
           ),
@@ -167,7 +161,7 @@ export default function StemEntryScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.cropName}>{cropName}</Text>
-        <Text style={[styles.date, { color: colors.text, opacity: 0.7 }]}>
+        <Text style={[styles.date, { color: colors.text, opacity: 0.7, marginBottom: spacing.lg }]}>
           {harvestDate}
         </Text>
 
@@ -205,7 +199,8 @@ export default function StemEntryScreen() {
           styles.footer,
           {
             backgroundColor: colors.background,
-            borderTopColor: colorScheme === 'dark' ? '#333' : '#eee',
+            borderTopColor: colors.cardBorder,
+            padding: spacing.lg,
             paddingBottom: Math.max(32, insets.bottom + 16),
           },
         ]}
@@ -214,12 +209,14 @@ export default function StemEntryScreen() {
           style={[
             styles.totalCard,
             {
-              backgroundColor: colorScheme === 'dark' ? '#222' : '#f8f8f8',
-              borderColor: colorScheme === 'dark' ? '#333' : '#eee',
+              backgroundColor: colors.cardBg,
+              borderColor: colors.cardBorder,
+              borderRadius: radius.md,
+              marginBottom: spacing.lg,
             },
           ]}
         >
-          <Text style={styles.totalLabel}>Total Harvested</Text>
+          <Text style={[styles.totalLabel, { color: colors.text }]}>Total Harvested</Text>
           <Text style={[styles.totalValue, { color: colors.text }]}>{totalAll}</Text>
         </View>
 
@@ -229,11 +226,12 @@ export default function StemEntryScreen() {
               key={n}
               style={({ pressed }) => [
                 styles.quickBtn,
+                { backgroundColor: colors.primary, borderRadius: radius.sm },
                 pressed && styles.quickBtnPressed,
               ]}
               onPress={() => addToCount(n)}
             >
-              <Text style={styles.quickBtnText}>+{n}</Text>
+              <Text style={[styles.quickBtnText, { color: colors.onPrimary }]}>+{n}</Text>
             </Pressable>
           ))}
         </View>
@@ -242,7 +240,7 @@ export default function StemEntryScreen() {
           style={[
             styles.saveBtn,
             totalAll === 0 && styles.saveBtnDisabled,
-            { borderColor: totalAll > 0 ? '#2f95dc' : '#999' },
+            { borderColor: totalAll > 0 ? colors.primary : colors.muted, borderRadius: radius.sm },
           ]}
           onPress={handleSave}
           disabled={totalAll === 0}
@@ -250,7 +248,7 @@ export default function StemEntryScreen() {
           <Text
             style={[
               styles.saveBtnText,
-              { color: totalAll > 0 ? '#2f95dc' : '#999' },
+              { color: totalAll > 0 ? colors.primary : colors.muted },
             ]}
           >
             Save & next
@@ -267,7 +265,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 24 },
   cropName: { fontSize: 20, fontWeight: '600', marginBottom: 4 },
-  date: { marginBottom: 16 },
+  date: {},
   loader: { marginVertical: 24 },
   varietyCard: {
     flexDirection: 'row',
@@ -281,19 +279,13 @@ const styles = StyleSheet.create({
   },
   varietyCardName: { fontSize: 16, fontWeight: '500' },
   varietyCardCount: { fontSize: 16, fontWeight: '600' },
-  footer: {
-    padding: 16,
-    paddingBottom: 32,
-    borderTopWidth: 1,
-  },
+  footer: { borderTopWidth: 1 },
   totalCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 16,
     borderWidth: 1,
   },
   totalLabel: { fontSize: 16, fontWeight: '500' },
@@ -305,19 +297,14 @@ const styles = StyleSheet.create({
   },
   quickBtn: {
     flex: 1,
-    backgroundColor: '#2f95dc',
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   quickBtnPressed: { opacity: 0.8 },
-  quickBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  saveBtn: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 2,
-  },
+  quickBtnText: { fontSize: 16, fontWeight: '600' },
+  saveBtn: { paddingVertical: 14, alignItems: 'center', borderWidth: 2 },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { fontSize: 16, fontWeight: '600' },
 });

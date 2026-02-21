@@ -12,14 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { useTheme } from '@/components/useTheme';
 import { useVarieties } from '@/hooks/useVarieties';
 import type { Variety } from '@/db/types';
 
 export default function CropDetailScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { colors, spacing, radius, typography } = useTheme();
   const { cropId, cropName } = useLocalSearchParams<{
     cropId: string;
     cropName: string;
@@ -58,38 +56,41 @@ export default function CropDetailScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={styles.cropName}>{cropName}</Text>
+    <View style={[styles.container, { flex: 1, padding: spacing.lg, backgroundColor: colors.background }]}>
+      <Text style={[styles.cropName, { color: colors.text, marginBottom: spacing.lg }]}>{cropName}</Text>
 
-      <Text style={styles.sectionTitle}>Varieties</Text>
-      <View style={styles.addRow}>
+      <Text style={[styles.sectionTitle, { ...typography.bodyEmphasis, marginBottom: spacing.md, color: colors.text }]}>
+        Varieties
+      </Text>
+      <View style={[styles.addRow, { gap: spacing.sm, marginBottom: spacing.lg }]}>
         <TextInput
           style={[
             styles.addInput,
             {
               color: colors.text,
-              borderColor: colorScheme === 'dark' ? '#444' : '#ddd',
-              backgroundColor: colorScheme === 'dark' ? '#222' : '#fff',
+              borderColor: colors.inputBorder,
+              backgroundColor: colors.surfaceElevated,
+              borderRadius: radius.sm,
             },
           ]}
           placeholder="New variety"
           value={newVarietyName}
           onChangeText={setNewVarietyName}
-          placeholderTextColor={colorScheme === 'dark' ? '#888' : '#999'}
+          placeholderTextColor={colors.muted}
         />
         <Pressable
-          style={[styles.addBtn, adding && styles.addBtnDisabled]}
+          style={[styles.addBtn, { backgroundColor: colors.primary, borderRadius: radius.sm, padding: spacing.md }, adding && styles.addBtnDisabled]}
           onPress={handleAddVariety}
           disabled={adding || !newVarietyName.trim()}
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={24} color={colors.onPrimary} />
         </Pressable>
       </View>
 
       {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.text} />
+        <ActivityIndicator style={[styles.loader, { marginVertical: spacing.xl }]} color={colors.text} />
       ) : varieties.length === 0 ? (
-        <Text style={[styles.empty, { color: colors.text, opacity: 0.7 }]}>
+        <Text style={[styles.empty, { color: colors.text, opacity: 0.7, marginBottom: spacing.lg }]}>
           No varieties. Add one above.
         </Text>
       ) : (
@@ -100,19 +101,19 @@ export default function CropDetailScreen() {
             <View
               style={[
                 styles.row,
-                { borderBottomColor: colorScheme === 'dark' ? '#333' : '#eee' },
+                { borderBottomColor: colors.rowBorder },
               ]}
             >
-              <Text style={styles.varietyName}>{item.name}</Text>
+              <Text style={[styles.varietyName, { color: colors.text }]}>{item.name}</Text>
               <Pressable
                 onPress={() => handleDeleteVariety(item)}
-                hitSlop={8}
+                hitSlop={spacing.sm}
                 style={({ pressed }) => pressed && { opacity: 0.6 }}
               >
                 <Ionicons
                   name="trash-outline"
                   size={20}
-                  color={colorScheme === 'dark' ? '#ff6b6b' : '#c00'}
+                  color={colors.destructive}
                 />
               </Pressable>
             </View>
@@ -120,8 +121,10 @@ export default function CropDetailScreen() {
         />
       )}
 
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Season summary</Text>
-      <Text style={[styles.placeholder, { color: colors.text, opacity: 0.6 }]}>
+      <Text style={[styles.sectionTitle, { marginTop: spacing.xl, marginBottom: spacing.md, color: colors.text }]}>
+        Season summary
+      </Text>
+      <Text style={[styles.placeholder, { color: colors.text, opacity: 0.6, ...typography.small }]}>
         Coming soon
       </Text>
     </View>
@@ -129,45 +132,28 @@ export default function CropDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  cropName: { fontSize: 20, fontWeight: '600', marginBottom: 16 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  addRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
+  container: {},
+  cropName: { fontSize: 20, fontWeight: '600' },
+  sectionTitle: {},
+  addRow: { flexDirection: 'row' },
   addInput: {
     flex: 1,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  addBtn: {
-    backgroundColor: '#2f95dc',
-    borderRadius: 8,
-    padding: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  addBtn: { justifyContent: 'center', alignItems: 'center' },
   addBtnDisabled: { opacity: 0.5 },
-  loader: { marginVertical: 24 },
-  empty: { marginBottom: 16 },
+  loader: {},
+  empty: {},
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   varietyName: { fontSize: 16 },
-  placeholder: { fontSize: 14 },
+  placeholder: {},
 });

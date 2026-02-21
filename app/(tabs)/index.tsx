@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   StyleSheet,
@@ -6,25 +6,42 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { View, Text } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { useTheme } from '@/components/useTheme';
 import { useCropsForRecord } from '@/hooks/useCropsForRecord';
 import { useDailyTotals } from '@/hooks/useDailyTotals';
 import { useDebounce } from '@/hooks/useDebounce';
 import type { Crop } from '@/db/types';
 
 export default function RecordScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { colors, spacing, radius, typography } = useTheme();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const { crops, loading, loadingMore, hasMore, refetch, loadMore, markUsed } =
     useCropsForRecord(debouncedSearch);
   const { stemsCut, refetch: refetchDaily } = useDailyTotals();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const didAutoNavigateForSearch = useRef(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -32,6 +49,23 @@ export default function RecordScreen() {
       refetchDaily();
     }, [refetch, refetchDaily])
   );
+
+  // When searching, if exactly one result, go directly to record harvest for that crop
+  useEffect(() => {
+    if (debouncedSearch.trim() === '') {
+      didAutoNavigateForSearch.current = false;
+      return;
+    }
+    if (didAutoNavigateForSearch.current || loading || crops.length !== 1) return;
+    const crop = crops[0];
+    didAutoNavigateForSearch.current = true;
+    markUsed(crop.id);
+    setSearch('');
+    router.push({
+      pathname: '/record/stem-entry',
+      params: { cropId: crop.id, cropName: crop.name },
+    });
+  }, [debouncedSearch, loading, crops, markUsed]);
 
   const handleSelectCrop = (crop: Crop) => {
     markUsed(crop.id);
@@ -41,26 +75,37 @@ export default function RecordScreen() {
     });
   };
 
-  const dailyCardBg = colorScheme === 'dark' ? '#111' : '#f8f8f8';
-  const dailyCardBorder = colorScheme === 'dark' ? '#333' : '#eee';
   const now = new Date();
+  const todayDate = now.toISOString().slice(0, 10);
   const monthLabel = now.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
   const dayLabel = now.toLocaleDateString('en-US', { day: 'numeric' });
 
+  const handlePressTodaySummary = () => {
+    router.push({
+      pathname: '/analyze/day-detail',
+      params: { date: todayDate },
+    });
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Daily totals</Text>
-      <View
-        style={[
+      <View style={[styles.inner, { padding: spacing.lg, paddingBottom: keyboardHeight }]}>
+      <Text style={[styles.sectionTitle, { ...typography.sectionTitle, marginBottom: spacing.md, color: colors.text }]}>
+        Daily totals
+      </Text>
+      <Pressable
+        onPress={handlePressTodaySummary}
+        style={({ pressed }) => [
           styles.dailyCard,
-          { backgroundColor: dailyCardBg, borderColor: dailyCardBorder },
+          { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
+          pressed && styles.dailyCardPressed,
         ]}
       >
-        <View style={styles.dateBox}>
-          <Text style={styles.dateMonth}>{monthLabel}</Text>
-          <Text style={styles.dateDay}>{dayLabel}</Text>
+        <View style={[styles.dateBox, { backgroundColor: colors.primary }]}>
+          <Text style={[styles.dateMonth, { color: colors.onPrimary }]}>{monthLabel}</Text>
+          <Text style={[styles.dateDay, { color: colors.onPrimary }]}>{dayLabel}</Text>
         </View>
-        <View style={[styles.stemsSection, { borderLeftColor: dailyCardBorder }]}>
+        <View style={[styles.stemsSection, { borderLeftColor: colors.cardBorder }]}>
           <Text style={[styles.stemsLabel, { color: colors.text }]}>
             Stems cut
           </Text>
@@ -68,15 +113,17 @@ export default function RecordScreen() {
             {stemsCut}
           </Text>
         </View>
-      </View>
+      </Pressable>
 
-      <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Recent crops</Text>
+      <Text style={[styles.sectionTitle, { marginTop: spacing.xl, marginBottom: spacing.md, color: colors.text }]}>
+        Recent crops
+      </Text>
 
       <View style={styles.listArea}>
         {loading ? (
           <ActivityIndicator style={styles.loader} />
         ) : crops.length === 0 ? (
-          <Text style={styles.empty}>
+          <Text style={[styles.empty, { color: colors.muted }]}>
             No crops yet. Add crops in the Plan tab.
           </Text>
         ) : (
@@ -94,12 +141,13 @@ export default function RecordScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.row,
+                { borderBottomColor: colors.rowBorder },
                 pressed && styles.rowPressed,
               ]}
               onPress={() => handleSelectCrop(item)}
             >
-              <Text style={styles.cropName}>{item.name}</Text>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
+              <Text style={[styles.cropName, { color: colors.text }]}>{item.name}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </Pressable>
           )}
           />
@@ -107,28 +155,35 @@ export default function RecordScreen() {
       </View>
 
       <View style={[styles.searchFooter, { backgroundColor: colors.background }]}>
-        <View style={[styles.searchRow, colorScheme === 'dark' && styles.searchRowDark]}>
-          <Ionicons name="search" size={20} color="#666" />
+        <View style={[styles.searchRow, { backgroundColor: colors.inputBg }]}>
+          <Ionicons name="search" size={20} color={colors.muted} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search"
             value={search}
             onChangeText={setSearch}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.muted}
           />
+          {search.length > 0 ? (
+            <Pressable
+              onPress={() => setSearch('')}
+              hitSlop={spacing.sm}
+              style={({ pressed }) => [pressed && styles.clearPressed]}
+            >
+              <Ionicons name="close-circle" size={20} color={colors.muted} />
+            </Pressable>
+          ) : null}
         </View>
+      </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
+  container: { flex: 1 },
+  inner: { flex: 1 },
+  sectionTitle: {},
   dailyCard: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -136,8 +191,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+  dailyCardPressed: { opacity: 0.8 },
   dateBox: {
-    backgroundColor: '#2f95dc',
     paddingHorizontal: 16,
     paddingVertical: 12,
     justifyContent: 'center',
@@ -149,13 +204,11 @@ const styles = StyleSheet.create({
   dateMonth: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
     letterSpacing: 0.5,
   },
   dateDay: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#fff',
     marginTop: 2,
   },
   stemsSection: {
@@ -177,24 +230,20 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
-  },
-  searchRowDark: {
-    backgroundColor: '#333',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     padding: 0,
   },
+  clearPressed: { opacity: 0.6 },
   loader: { marginTop: 24 },
   loadMoreSpinner: { paddingVertical: 16 },
   empty: {
-    color: '#666',
     marginTop: 24,
     fontSize: 16,
   },
@@ -205,7 +254,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   rowPressed: { opacity: 0.6 },
   cropName: { fontSize: 16 },

@@ -1,7 +1,7 @@
+import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
-import { getDatabase } from '@/db/init';
 import { parseCropVarietyCSV } from '@/utils/csv';
 
 export interface ImportResult {
@@ -12,6 +12,8 @@ export interface ImportResult {
 }
 
 export function useImport() {
+  const db = useSQLiteContext();
+
   const importCropsFromCSV = useCallback(async (): Promise<ImportResult> => {
     const result: ImportResult = { cropsAdded: 0, varietiesAdded: 0, skipped: 0 };
 
@@ -38,8 +40,6 @@ export function useImport() {
         result.error = 'No data found. CSV should have Species and Variety columns.';
         return result;
       }
-
-      const db = await getDatabase();
 
       // Build crop name -> varieties map (dedupe)
       const cropVarieties = new Map<string, Set<string>>();
@@ -99,7 +99,7 @@ export function useImport() {
       result.error = e instanceof Error ? e.message : 'Import failed';
       return result;
     }
-  }, []);
+  }, [db]);
 
   return { importCropsFromCSV };
 }

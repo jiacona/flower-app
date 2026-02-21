@@ -2,10 +2,13 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import { SQLiteProvider } from 'expo-sqlite';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { INIT_SQL } from '@/db/schema';
+import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
 export {
@@ -32,25 +35,38 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
   if (!loaded) {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <SQLiteProvider
+      databaseName="flowerfarm.db"
+      onInit={async (db) => {
+        await db.execAsync(INIT_SQL);
+      }}
+    >
+      <RootLayoutNav />
+    </SQLiteProvider>
+  );
 }
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const backgroundColor = Colors[colorScheme === 'dark' ? 'dark' : 'light'].background;
+
+  // SQLiteProvider only renders children after DB is open and onInit has run.
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="record" options={{ headerShown: false }} />
         <Stack.Screen name="plan" options={{ headerShown: false }} />

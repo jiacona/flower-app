@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getDatabase } from '@/db/init';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Crop } from '@/db/types';
 
 export function useCrops(searchQuery?: string) {
+  const db = useSQLiteContext();
   const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasFetchedOnce = useRef(false);
 
   const fetchCrops = useCallback(async () => {
+    if (!hasFetchedOnce.current) setLoading(true);
     try {
-      setLoading(true);
-      const db = await getDatabase();
       let rows: Crop[];
       if (searchQuery && searchQuery.trim()) {
         const q = `%${searchQuery.trim()}%`;
@@ -25,9 +26,10 @@ export function useCrops(searchQuery?: string) {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load crops');
     } finally {
+      hasFetchedOnce.current = true;
       setLoading(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, db]);
 
   useEffect(() => {
     fetchCrops();
@@ -35,7 +37,6 @@ export function useCrops(searchQuery?: string) {
 
   const addCrop = useCallback(
     async (name: string, pricePerStem = 0) => {
-      const db = await getDatabase();
       const result = await db.runAsync(
         'INSERT INTO crops (name, price_per_stem) VALUES (?, ?)',
         name.trim(),
@@ -44,12 +45,11 @@ export function useCrops(searchQuery?: string) {
       await fetchCrops();
       return result.lastInsertRowId;
     },
-    [fetchCrops]
+    [fetchCrops, db]
   );
 
   const updateCrop = useCallback(
     async (id: number, updates: { name?: string; price_per_stem?: number }) => {
-      const db = await getDatabase();
       if (updates.name !== undefined) {
         await db.runAsync('UPDATE crops SET name = ? WHERE id = ?', updates.name.trim(), id);
       }
@@ -58,16 +58,15 @@ export function useCrops(searchQuery?: string) {
       }
       await fetchCrops();
     },
-    [fetchCrops]
+    [fetchCrops, db]
   );
 
   const deleteCrop = useCallback(
     async (id: number) => {
-      const db = await getDatabase();
       await db.runAsync('DELETE FROM crops WHERE id = ?', id);
       await fetchCrops();
     },
-    [fetchCrops]
+    [fetchCrops, db]
   );
 
   return { crops, loading, error, refetch: fetchCrops, addCrop, updateCrop, deleteCrop };

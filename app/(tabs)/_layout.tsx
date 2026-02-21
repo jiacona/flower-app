@@ -2,8 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
+import { useTheme } from '@/components/useTheme';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof Ionicons>['name'];
@@ -13,8 +12,8 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const tint = Colors[colorScheme ?? 'light'].tint;
+  const { colors } = useTheme();
+  const tint = colors.tint;
 
   return (
     <Tabs

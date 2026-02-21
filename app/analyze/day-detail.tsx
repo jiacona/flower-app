@@ -8,15 +8,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { useTheme } from '@/components/useTheme';
 import { useDayBreakdown } from '@/hooks/useDayBreakdown';
 
 export default function DayDetailScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { colors, spacing, radius, typography } = useTheme();
   const { date } = useLocalSearchParams<{ date: string }>();
-  const { items, loading } = useDayBreakdown(date);
+  const { groups, loading } = useDayBreakdown(date);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T12:00:00');
@@ -26,9 +24,6 @@ export default function DayDetailScreen() {
       day: 'numeric',
     });
   };
-
-  const cardBg = colorScheme === 'dark' ? '#222' : '#f8f8f8';
-  const cardBorder = colorScheme === 'dark' ? '#333' : '#eee';
 
   if (!date) return null;
 
@@ -42,55 +37,87 @@ export default function DayDetailScreen() {
               style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
               hitSlop={12}
             >
-              <Ionicons name="chevron-back" size={28} color={colors.tint} />
+              <Ionicons name="chevron-back" size={28} color={colors.primary} />
             </Pressable>
           ),
         }}
       />
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.dateTitle, { color: colors.text }]}>
+      <View style={[styles.container, { flex: 1, padding: spacing.lg, backgroundColor: colors.background }]}>
+      <Text style={[styles.dateTitle, { ...typography.sectionTitle, marginBottom: spacing.lg, color: colors.text }]}>
         {formatDate(date)}
       </Text>
 
       {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.text} />
-      ) : items.length === 0 ? (
-        <Text style={[styles.empty, { color: colors.text }]}>
+        <ActivityIndicator style={[styles.loader, { marginTop: spacing.xl }]} color={colors.text} />
+      ) : groups.length === 0 ? (
+        <Text style={[styles.empty, { fontSize: 16, marginTop: spacing.lg, color: colors.text }]}>
           No records for this day.
         </Text>
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
           showsVerticalScrollIndicator={false}
         >
-          {items.map((item, idx) => {
-            const label = item.varietyName
-              ? `${item.cropName}, ${item.varietyName}`
-              : item.cropName;
-            return (
+          {groups.map((group) => (
+            <View
+              key={group.cropName}
+              style={[
+                styles.speciesCard,
+                {
+                  backgroundColor: colors.cardBg,
+                  borderColor: colors.cardBorder,
+                  borderRadius: radius.md,
+                  marginBottom: spacing.md,
+                },
+              ]}
+            >
+              {(() => {
+                const onlyMixed =
+                  group.varieties.length === 1 && group.varieties[0].varietyName === null;
+                return (
+                  <>
               <View
-                key={`${item.cropName}-${item.varietyName ?? 'mixed'}-${idx}`}
                 style={[
-                  styles.row,
-                  {
-                    backgroundColor: cardBg,
-                    borderColor: cardBorder,
-                  },
+                  styles.speciesHeader,
+                  onlyMixed
+                    ? { borderBottomWidth: 0 }
+                    : { borderBottomColor: colors.cardBorder },
                 ]}
               >
                 <Text
-                  style={[styles.rowLabel, { color: colors.text }]}
+                  style={[styles.speciesName, { color: colors.text }]}
                   numberOfLines={1}
                 >
-                  {label}
+                  {group.cropName}
                 </Text>
-                <Text style={[styles.rowValue, { color: colors.text }]}>
-                  {item.stemsCut}
+                <Text style={[styles.speciesTotal, { color: colors.text }]}>
+                  {group.cropTotal}
                 </Text>
               </View>
-            );
-          })}
+              {onlyMixed ? null : (
+                group.varieties.map((v, idx) => (
+                  <View
+                    key={`${v.varietyName ?? 'crop'}-${idx}`}
+                    style={styles.varietyRow}
+                  >
+                    <Text
+                      style={[styles.varietyLabel, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {v.varietyName ?? 'Mixed'}
+                    </Text>
+                    <Text style={[styles.varietyValue, { color: colors.text }]}>
+                      {v.stemsCut}
+                    </Text>
+                  </View>
+                ))
+              )}
+                  </>
+                );
+              })()}
+            </View>
+          ))}
         </ScrollView>
       )}
     </View>
@@ -99,29 +126,30 @@ export default function DayDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  dateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  loader: { marginTop: 24 },
-  empty: {
-    fontSize: 16,
-    marginTop: 16,
-  },
+  container: {},
+  dateTitle: {},
+  loader: {},
+  empty: {},
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
-  row: {
+  speciesCard: { borderWidth: 1, overflow: 'hidden' },
+  speciesHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
+    borderBottomWidth: 1,
   },
-  rowLabel: { fontSize: 16, flex: 1 },
-  rowValue: { fontSize: 18, fontWeight: '700', marginLeft: 12 },
+  speciesName: { fontSize: 16, fontWeight: '600', flex: 1 },
+  speciesTotal: { fontSize: 18, fontWeight: '700', marginLeft: 12 },
+  varietyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingLeft: 24,
+  },
+  varietyLabel: { fontSize: 15, flex: 1, opacity: 0.9 },
+  varietyValue: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
 });

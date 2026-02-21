@@ -1,15 +1,15 @@
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState, useEffect, useCallback } from 'react';
-import { getDatabase } from '@/db/init';
 import type { Crop } from '@/db/types';
 
 export function useRecentCrops(searchQuery?: string, limit = 10) {
+  const db = useSQLiteContext();
   const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRecent = useCallback(async () => {
     try {
       setLoading(true);
-      const db = await getDatabase();
       const q = searchQuery?.trim();
       let rows: Crop[];
       if (q) {
@@ -37,20 +37,22 @@ export function useRecentCrops(searchQuery?: string, limit = 10) {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, limit]);
+  }, [searchQuery, limit, db]);
 
   useEffect(() => {
     fetchRecent();
   }, [fetchRecent]);
 
-  const markUsed = useCallback(async (cropId: number) => {
-    const db = await getDatabase();
-    await db.runAsync(
-      `INSERT INTO recent_crops (crop_id, last_used_at) VALUES (?, datetime('now'))
-       ON CONFLICT(crop_id) DO UPDATE SET last_used_at = datetime('now')`,
-      cropId
-    );
-  }, []);
+  const markUsed = useCallback(
+    async (cropId: number) => {
+      await db.runAsync(
+        `INSERT INTO recent_crops (crop_id, last_used_at) VALUES (?, datetime('now'))
+         ON CONFLICT(crop_id) DO UPDATE SET last_used_at = datetime('now')`,
+        cropId
+      );
+    },
+    [db]
+  );
 
   return { crops, loading, refetch: fetchRecent, markUsed };
 }

@@ -1,24 +1,29 @@
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState, useEffect, useCallback } from 'react';
-import { getDatabase } from '@/db/init';
 
-export type DayBreakdownItem = {
-  cropName: string;
+export type DayBreakdownVariety = {
   varietyName: string | null;
   stemsCut: number;
 };
 
+export type DayBreakdownGroup = {
+  cropName: string;
+  cropTotal: number;
+  varieties: DayBreakdownVariety[];
+};
+
 export function useDayBreakdown(date: string | undefined) {
-  const [items, setItems] = useState<DayBreakdownItem[]>([]);
+  const db = useSQLiteContext();
+  const [groups, setGroups] = useState<DayBreakdownGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     if (!date) {
-      setItems([]);
+      setGroups([]);
       setLoading(false);
       return;
     }
     try {
-      const db = await getDatabase();
       const rows = await db.getAllAsync<{
         crop_name: string;
         variety_name: string | null;
@@ -33,24 +38,36 @@ export function useDayBreakdown(date: string | undefined) {
          ORDER BY c.name, v.name`,
         date
       );
-      setItems(
-        rows.map((r) => ({
-          cropName: r.crop_name,
-          varietyName: r.variety_name,
-          stemsCut: r.total,
-        }))
+      const items = rows.map((r) => ({
+        cropName: r.crop_name,
+        varietyName: r.variety_name,
+        stemsCut: r.total,
+      }));
+      const byCrop = new Map<string, DayBreakdownVariety[]>();
+      for (const item of items) {
+        const list = byCrop.get(item.cropName) ?? [];
+        list.push({ varietyName: item.varietyName, stemsCut: item.stemsCut });
+        byCrop.set(item.cropName, list);
+      }
+      const grouped: DayBreakdownGroup[] = Array.from(byCrop.entries()).map(
+        ([cropName, varieties]) => ({
+          cropName,
+          cropTotal: varieties.reduce((sum, v) => sum + v.stemsCut, 0),
+          varieties,
+        })
       );
+      setGroups(grouped);
     } catch {
-      setItems([]);
+      setGroups([]);
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, db]);
 
   useEffect(() => {
     setLoading(true);
     fetch();
   }, [fetch]);
 
-  return { items, loading };
+  return { groups, loading };
 }
